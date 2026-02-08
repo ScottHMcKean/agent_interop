@@ -71,6 +71,8 @@ The app exposes three surfaces: a registry HTTP API, an MCP resource endpoint, a
 - `GET /api/registry/agents/{agent_id}/versions` → list versions for an agent.
 - `GET /api/registry/agents/{agent_id}/versions/{version}` → fetch a specific version.
 - `GET /api/registry/agents/{agent_id}/card?version={version}` → fetch an A2A agent card JSON. If `version` is omitted, the default version is used.
+- `POST /api/registry/agent-cards` → register or update an A2A agent card.
+- `GET /api/registry/status` → health summary for database, MCP, and A2A.
 
 ### MCP Registry
 
@@ -134,6 +136,16 @@ POST /api/a2a
 
 See `notebooks/mcp_a2a_walkthrough.ipynb` for MCP discovery, A2A calls, and registry HTTP API examples.
 
+## Services and example agent
+
+The app is organized by service:
+
+- `src/registry_app/services/mcp_registry.py`: MCP server entrypoint
+- `src/registry_app/services/a2a_executor.py`: A2A gateway
+- `src/registry_app/services/http_api.py`: UI and registry HTTP API
+
+Agents should be served separately from this app. This repository keeps only a single example agent card at `examples/agent_cards/example_agent_card.json` to demonstrate registration and discovery. We do not recommend overloading this app with additional agents.
+
 ## Configuration
 
 The app reads a flat `config.yaml` file at the repo root. See `config.yaml` for the full set of keys.
@@ -157,3 +169,11 @@ Common optional keys:
 ```
 uv run uvicorn registry_app.server:app --host 0.0.0.0 --port 8000
 ```
+
+## Registry UI
+
+```
+http://localhost:8000/api/registry/ui
+```
+
+The UI shows database status, MCP/A2A endpoints, and lets you browse agent cards.

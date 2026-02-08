@@ -11,9 +11,9 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
-from registry_app.a2a_executor import RegistryAgentExecutor
-from registry_app.http_api import build_registry_api
-from registry_app.mcp_registry import build_mcp_app
+from registry_app.services.a2a_executor import RegistryAgentExecutor
+from registry_app.services.http_api import build_registry_api
+from registry_app.services.mcp_registry import build_mcp_app
 
 
 def _build_agent_card() -> AgentCard:

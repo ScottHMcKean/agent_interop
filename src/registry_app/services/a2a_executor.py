@@ -16,7 +16,7 @@ from databricks.sdk import WorkspaceClient
 from registry_app.config import load_settings
 from registry_app.db import get_connection
 from registry_app.llm_agent import run_single_turn_agent
-from registry_app.mcp_client import build_tool_infos
+from registry_app.services.mcp_client import build_tool_infos
 from registry_app.registry import (
     get_agent,
     get_agent_card,

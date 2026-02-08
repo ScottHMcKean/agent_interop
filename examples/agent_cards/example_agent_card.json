@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0",
+  "humanReadableId": "examples/demo_agent",
+  "agentVersion": "0.1.0",
+  "name": "Demo Agent",
+  "description": "Example agent card for registry registration and discovery.",
+  "url": "https://example.com/api/a2a",
+  "authSchemes": [
+    {
+      "scheme": "none"
+    }
+  ],
+  "defaultInputModes": [
+    "text"
+  ],
+  "defaultOutputModes": [
+    "text"
+  ],
+  "capabilities": {
+    "streaming": false
+  },
+  "skills": [
+    {
+      "id": "demo_skill",
+      "name": "Demo Skill",
+      "description": "Handles simple demo tasks."
+    }
+  ]
+}

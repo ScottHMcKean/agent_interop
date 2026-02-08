@@ -6,7 +6,7 @@ from typing import Any, Iterable
 
 from databricks.sdk import WorkspaceClient
 
-from registry_app.mcp_client import ToolInfo
+from registry_app.services.mcp_client import ToolInfo
 
 
 def _to_chat_messages(msg: dict[str, Any]) -> list[dict[str, Any]]:

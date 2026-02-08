@@ -7,7 +7,7 @@ import pytest
 
 from registry_app.db import get_connection
 from registry_app.registry import get_agent_card, list_agent_cards
-from registry_app.a2a_executor import RegistryAgentExecutor
+from registry_app.services.a2a_executor import RegistryAgentExecutor
 
 
 def _insert_seed(conn, schema: str, agent_id: str, card: dict) -> None:

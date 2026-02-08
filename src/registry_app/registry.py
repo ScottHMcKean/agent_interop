@@ -114,3 +114,136 @@ def get_agent_card(
             card_json = {"raw": card_json}
     row["card_json"] = card_json
     return row
+
+
+def upsert_agent(
+    conn,
+    *,
+    agent_id: str,
+    name: str,
+    description: str,
+    owner: str,
+    status: str,
+    default_version: str,
+) -> None:
+    query = sql.SQL(
+        "INSERT INTO {} (agent_id, name, description, owner, status, default_version) "
+        "VALUES (%s, %s, %s, %s, %s, %s) "
+        "ON CONFLICT (agent_id) DO UPDATE SET "
+        "name = EXCLUDED.name, "
+        "description = EXCLUDED.description, "
+        "owner = EXCLUDED.owner, "
+        "status = EXCLUDED.status, "
+        "default_version = EXCLUDED.default_version, "
+        "updated_at = now()"
+    ).format(_table("agents"))
+    with conn.cursor() as cur:
+        cur.execute(
+            query,
+            (agent_id, name, description, owner, status, default_version),
+        )
+
+
+def upsert_agent_version(
+    conn,
+    *,
+    agent_id: str,
+    version: str,
+    mcp_server_url: str,
+    llm_endpoint_name: str | None,
+    system_prompt: str | None,
+    tags: dict[str, Any] | None,
+) -> None:
+    query = sql.SQL(
+        "INSERT INTO {} "
+        "(agent_id, version, mcp_server_url, llm_endpoint_name, system_prompt, tags) "
+        "VALUES (%s, %s, %s, %s, %s, %s) "
+        "ON CONFLICT (agent_id, version) DO UPDATE SET "
+        "mcp_server_url = EXCLUDED.mcp_server_url, "
+        "llm_endpoint_name = EXCLUDED.llm_endpoint_name, "
+        "system_prompt = EXCLUDED.system_prompt, "
+        "tags = EXCLUDED.tags, "
+        "updated_at = now()"
+    ).format(_table("agent_versions"))
+    with conn.cursor() as cur:
+        cur.execute(
+            query,
+            (
+                agent_id,
+                version,
+                mcp_server_url,
+                llm_endpoint_name,
+                system_prompt,
+                json.dumps(tags or {}),
+            ),
+        )
+
+
+def upsert_agent_protocol_card(
+    conn,
+    *,
+    agent_id: str,
+    version: str,
+    protocol: str,
+    card_json: dict[str, Any],
+) -> None:
+    query = sql.SQL(
+        "INSERT INTO {} (agent_id, version, protocol, card_json) "
+        "VALUES (%s, %s, %s, %s) "
+        "ON CONFLICT (agent_id, version, protocol) DO UPDATE SET "
+        "card_json = EXCLUDED.card_json, "
+        "updated_at = now()"
+    ).format(_table("agent_protocol_cards"))
+    with conn.cursor() as cur:
+        cur.execute(
+            query,
+            (
+                agent_id,
+                version,
+                protocol,
+                json.dumps(card_json),
+            ),
+        )
+
+
+def register_agent_card(
+    conn,
+    *,
+    agent_id: str,
+    name: str,
+    description: str,
+    owner: str,
+    status: str,
+    version: str,
+    mcp_server_url: str,
+    llm_endpoint_name: str | None,
+    system_prompt: str | None,
+    tags: dict[str, Any] | None,
+    protocol: str,
+    card_json: dict[str, Any],
+) -> None:
+    upsert_agent(
+        conn,
+        agent_id=agent_id,
+        name=name,
+        description=description,
+        owner=owner,
+        status=status,
+        default_version=version,
+    )
+    upsert_agent_version(
+        conn,
+        agent_id=agent_id,
+        version=version,
+        mcp_server_url=mcp_server_url,
+        llm_endpoint_name=llm_endpoint_name,
+        system_prompt=system_prompt,
+        tags=tags,
+    )
+    upsert_agent_protocol_card(
+        conn,
+        agent_id=agent_id,
+        version=version,
+        protocol=protocol,
+        card_json=card_json,
+    )

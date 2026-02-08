@@ -19,7 +19,7 @@ async def main():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)  # Get a logger instance
 
-    base_url = 'https://databricks-a2a-mcp-1444828305810485.aws.databricksapps.com/api'
+    base_url = 'https://<your-app>.databricksapps.com/api'
     
     async with httpx.AsyncClient(timeout=100) as httpx_client:
         # Initialize A2ACardResolver
