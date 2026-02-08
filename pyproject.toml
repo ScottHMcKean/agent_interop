@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-interop"
+version = "0.1.0"
+description = "Databricks MCP-first registry and A2A gateway app"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "a2a-sdk[http-server]>=0.3.0,<0.4.0",
+    "databricks-connect==17.3.4",
+    "databricks-mcp>=0.1.0",
+    "databricks-sdk>=0.57.0",
+    "fastapi>=0.115.0",
+    "fastmcp>=2.10.0",
+    "mcp>=1.10.0",
+    "psycopg[binary]>=3.2.0",
+    "pyyaml>=6.0.0",
+    "uv>=0.4.0",
+    "uvicorn>=0.34.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0",
+  "ruff>=0.6.0",
+  "ipykernel>=7.2.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+  "integration: integration tests that require Lakebase access",
+]

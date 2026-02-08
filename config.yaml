@@ -1,0 +1,14 @@
+lakebase_dsn: ''
+lakebase_host: instance-edff1576-7f2f-4f9e-851e-993179cc136b.database.azuredatabricks.net
+registry_schema: agent_registry
+default_llm_endpoint: <serving-endpoint-name>
+default_system_prompt: You are a helpful assistant.
+default_mcp_server_url: https://<your-workspace>/api/2.0/mcp/<server-id>
+a2a_base_url: /api/a2a
+registry_base_url: https://<your-app>.databricksapps.com
+catalog: shm
+lakebase_instance_name: agent-registry
+lakebase_capacity: CU_1
+lakebase_retention_days: 7
+lakebase_user: ''
+lakebase_db: databricks_postgres
