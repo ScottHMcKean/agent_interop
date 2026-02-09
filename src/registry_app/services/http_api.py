@@ -103,8 +103,6 @@ def build_registry_api() -> FastAPI:
                 status=payload.status,
                 version=payload.version,
                 mcp_server_url=payload.mcp_server_url,
-                llm_endpoint_name=payload.llm_endpoint_name,
-                system_prompt=payload.system_prompt,
                 tags=payload.tags,
                 protocol=payload.protocol,
                 card_json=card,

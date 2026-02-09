@@ -1,11 +1,8 @@
+workspace_url: https://adb-984752964297111.11.azuredatabricks.net/
 lakebase_dsn: ''
-lakebase_host: instance-edff1576-7f2f-4f9e-851e-993179cc136b.database.azuredatabricks.net
+lakebase_host: instance-4abc793a-34e7-49ea-aec3-e35f9ebefb2e.database.azuredatabricks.net
 registry_schema: agent_registry
-default_llm_endpoint: <serving-endpoint-name>
-default_system_prompt: You are a helpful assistant.
 default_mcp_server_url: https://<your-workspace>/api/2.0/mcp/<server-id>
-a2a_base_url: /api/a2a
-registry_base_url: https://<your-app>.databricksapps.com
 catalog: shm
 lakebase_instance_name: agent-registry
 lakebase_capacity: CU_1

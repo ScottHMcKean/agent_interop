@@ -15,8 +15,7 @@ class Settings:
     lakebase_user: str | None
     registry_schema: str
     registry_base_url: str | None
-    default_llm_endpoint: str | None
-    default_system_prompt: str
+    workspace_url: str | None
 
 
 def _load_config() -> dict[str, Any]:
@@ -41,15 +40,24 @@ def load_settings() -> Settings:
             "Missing required config: provide lakebase_dsn or lakebase_host."
         )
 
+    workspace_url = config.get("workspace_url") or None
+    registry_base_url = config.get("registry_base_url") or workspace_url
+    if not registry_base_url:
+        try:
+            from databricks.sdk import WorkspaceClient
+
+            registry_base_url = WorkspaceClient().config.host
+        except Exception:
+            registry_base_url = None
+    if registry_base_url:
+        registry_base_url = registry_base_url.rstrip("/")
+
     return Settings(
         lakebase_dsn=lakebase_dsn,
         lakebase_host=lakebase_host,
         lakebase_db=lakebase_db,
         lakebase_user=lakebase_user,
         registry_schema=config.get("registry_schema", "agent_registry"),
-        registry_base_url=config.get("registry_base_url"),
-        default_llm_endpoint=config.get("default_llm_endpoint"),
-        default_system_prompt=config.get(
-            "default_system_prompt", "You are a helpful assistant."
-        ),
+        registry_base_url=registry_base_url,
+        workspace_url=workspace_url,
     )

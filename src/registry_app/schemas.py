@@ -39,8 +39,6 @@ class RegisterAgentCardRequest(BaseModel):
     status: str = "active"
     version: str
     mcp_server_url: str
-    llm_endpoint_name: str | None = None
-    system_prompt: str | None = None
     tags: dict[str, Any] | None = None
     protocol: str = "a2a"
     card: AgentCardPayload

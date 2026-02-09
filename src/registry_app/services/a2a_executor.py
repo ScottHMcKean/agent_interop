@@ -11,12 +11,8 @@ from a2a.types import TaskState, TextPart
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 from a2a.types import InvalidParamsError, UnsupportedOperationError
-from databricks.sdk import WorkspaceClient
-
 from registry_app.config import load_settings
 from registry_app.db import get_connection
-from registry_app.llm_agent import run_single_turn_agent
-from registry_app.services.mcp_client import build_tool_infos
 from registry_app.registry import (
     get_agent,
     get_agent_card,
@@ -47,7 +43,6 @@ def _build_agent_call_hint() -> str:
 class RegistryAgentExecutor(AgentExecutor):
     def __init__(self) -> None:
         self.settings = load_settings()
-        self.workspace_client = WorkspaceClient()
 
     async def execute(
         self,
@@ -126,30 +121,11 @@ class RegistryAgentExecutor(AgentExecutor):
         if not agent_version:
             return f"No version data for '{agent_id}'."
 
-        mcp_server_url = agent_version.get("mcp_server_url")
-        if not mcp_server_url:
-            return f"Agent '{agent_id}' is missing mcp_server_url."
-
-        model = agent_version.get("llm_endpoint_name") or self.settings.default_llm_endpoint
-        if not model:
-            return "Missing LLM endpoint. Set DEFAULT_LLM_ENDPOINT or llm_endpoint_name."
-
-        system_prompt = (
-            agent_version.get("system_prompt") or self.settings.default_system_prompt
-        )
-
-        history = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ]
-
-        tool_infos = await build_tool_infos(
-            self.workspace_client, [mcp_server_url]
-        )
-        result = await run_single_turn_agent(
-            self.workspace_client, model, history, tool_infos
-        )
-        response = {"agent": agent, "agent_card": card, "result": result}
+        response = {
+            "agent": agent,
+            "agent_card": card,
+            "input": prompt,
+        }
         return json.dumps(response, indent=2)
 
     async def cancel(

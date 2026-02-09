@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -20,12 +19,6 @@ def _load_config() -> tuple[Path, dict]:
     if not isinstance(config, dict):
         raise RuntimeError("config.yaml must be a flat dictionary")
     return config_path, config
-
-
-def _slugify(value: str) -> str:
-    value = value.strip().lower()
-    value = re.sub(r"[^a-z0-9]+", "-", value)
-    return value.strip("-") or "agent"
 
 
 def _ensure_instance(w: WorkspaceClient, name: str, capacity: str, retention: int):
@@ -81,8 +74,9 @@ def main() -> None:
     retention = int(config.get("lakebase_retention_days", 7))
     lakebase_host = config.get("lakebase_host")
     lakebase_db = config.get("lakebase_db", "databricks_postgres")
+    lakebase_user = config.get("lakebase_user")
     default_mcp_server_url = config.get("default_mcp_server_url")
-    a2a_base_url = config.get("a2a_base_url", "/a2a")
+    a2a_base_url = "/a2a"
 
     w = WorkspaceClient()
     print("Ensuring Lakebase instance...")
@@ -121,8 +115,6 @@ CREATE TABLE IF NOT EXISTS {registry_schema}.agent_versions (
     agent_id TEXT NOT NULL,
     version TEXT NOT NULL,
     mcp_server_url TEXT,
-    llm_endpoint_name TEXT,
-    system_prompt TEXT,
     tags JSONB,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
@@ -151,75 +143,24 @@ CREATE TABLE IF NOT EXISTS {registry_schema}.agent_protocol_cards (
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     print("Updated config.yaml with lakebase_host and lakebase_db.")
 
-    print("Discovering serving endpoints...")
-    endpoints = list(w.serving_endpoints.list())
-    agents_seed = []
-    if endpoints:
-        for endpoint in endpoints:
-            name = endpoint.name
-            agents_seed.append(
-                {
-                    "agent_id": _slugify(name),
-                    "name": name,
-                    "description": f"Serving endpoint {name}",
-                    "owner": getattr(endpoint, "creator", None),
-                    "status": getattr(endpoint, "state", None),
-                    "version": "v1",
-                    "mcp_server_url": default_mcp_server_url,
-                    "llm_endpoint_name": name,
-                    "system_prompt": config.get("default_system_prompt"),
-                    "card": {
-                        "name": name,
-                        "description": f"A2A wrapper for {name}",
-                        "url": a2a_base_url,
-                        "version": "1.0.0",
-                        "defaultInputModes": ["text"],
-                        "defaultOutputModes": ["text"],
-                        "capabilities": {"streaming": False},
-                        "skills": [
-                            {
-                                "id": _slugify(name),
-                                "name": name,
-                                "description": f"Gateway to {name}",
-                                "tags": ["serving-endpoint"],
-                                "examples": ["Example request"],
-                            }
-                        ],
-                    },
-                }
-            )
-    else:
-        agents_seed.append(
-            {
-                "agent_id": "example-agent",
-                "name": "example-agent",
-                "description": "Example agent (no serving endpoints discovered)",
-                "owner": None,
-                "status": "unknown",
-                "version": "v1",
-                "mcp_server_url": default_mcp_server_url,
-                "llm_endpoint_name": config.get("default_llm_endpoint"),
-                "system_prompt": config.get("default_system_prompt"),
-                "card": {
-                    "name": "example-agent",
-                    "description": "Example A2A agent card",
-                    "url": a2a_base_url,
-                    "version": "1.0.0",
-                    "defaultInputModes": ["text"],
-                    "defaultOutputModes": ["text"],
-                    "capabilities": {"streaming": False},
-                    "skills": [
-                        {
-                            "id": "example-agent",
-                            "name": "example-agent",
-                            "description": "Example skill",
-                            "tags": ["example"],
-                            "examples": ["Example request"],
-                        }
-                    ],
-                },
-            }
-        )
+    print("Seeding Test Agent card...")
+    test_card_path = Path("examples/agent_cards/test_agent_card.json")
+    test_card = json.loads(test_card_path.read_text(encoding="utf-8"))
+    agents_seed = [
+        {
+            "agent_id": "test-agent",
+            "name": "Test Agent",
+            "description": "Test Agent for validating MCP and A2A flows.",
+            "owner": "setup",
+            "status": "active",
+            "version": "v1",
+            "mcp_server_url": default_mcp_server_url,
+            "card": {
+                **test_card,
+                "url": a2a_base_url,
+            },
+        }
+    ]
 
     print(f"Seeding {len(agents_seed)} agents...")
     insert_agents = f"""
@@ -239,15 +180,12 @@ ON CONFLICT (agent_id) DO UPDATE SET
 
     insert_versions = f"""
 INSERT INTO {registry_schema}.agent_versions (
-    agent_id, version, mcp_server_url, llm_endpoint_name, system_prompt, tags
+    agent_id, version, mcp_server_url, tags
 ) VALUES (
-    %(agent_id)s, %(version)s, %(mcp_server_url)s, %(llm_endpoint_name)s,
-    %(system_prompt)s, %(tags)s
+    %(agent_id)s, %(version)s, %(mcp_server_url)s, %(tags)s
 )
 ON CONFLICT (agent_id, version) DO UPDATE SET
     mcp_server_url = EXCLUDED.mcp_server_url,
-    llm_endpoint_name = EXCLUDED.llm_endpoint_name,
-    system_prompt = EXCLUDED.system_prompt,
     tags = EXCLUDED.tags,
     updated_at = now();
 """
@@ -273,9 +211,7 @@ ON CONFLICT (agent_id, version, protocol) DO UPDATE SET
                 "status": agent["status"],
                 "version": agent["version"],
                 "mcp_server_url": agent["mcp_server_url"],
-                "llm_endpoint_name": agent["llm_endpoint_name"],
-                "system_prompt": agent["system_prompt"],
-                "tags": json.dumps({"source": "serving_endpoint"}),
+                "tags": json.dumps({"source": "setup"}),
                 "protocol": "a2a",
                 "card_json": json.dumps(agent["card"]),
             }

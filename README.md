@@ -164,9 +164,7 @@ Common optional keys:
 - `lakebase_db` (default `databricks_postgres`): Lakebase database name.
 - `lakebase_user`: override username when building OAuth DSN.
 - `registry_schema` (default `agent_registry`): schema containing registry tables.
-- `default_llm_endpoint`: fallback Databricks Model Serving endpoint name.
-- `default_system_prompt`: fallback system prompt string.
-- `registry_base_url`: base URL for walkthrough calls (used in notebooks).
+- `workspace_url`: Databricks workspace URL (used to derive registry base URL).
 
 ## Local Run
 

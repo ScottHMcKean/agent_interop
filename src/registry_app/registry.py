@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Iterable
 
 from psycopg import sql
@@ -37,8 +38,7 @@ def get_agent(conn, agent_id: str) -> dict[str, Any] | None:
 
 def list_versions(conn, agent_id: str) -> list[dict[str, Any]]:
     query = sql.SQL(
-        "SELECT agent_id, version, mcp_server_url, llm_endpoint_name, "
-        "system_prompt, tags, created_at, updated_at "
+        "SELECT agent_id, version, mcp_server_url, tags, created_at, updated_at "
         "FROM {} WHERE agent_id = %s ORDER BY version"
     ).format(_table("agent_versions"))
     with conn.cursor() as cur:
@@ -50,8 +50,7 @@ def get_version(
     conn, agent_id: str, version: str
 ) -> dict[str, Any] | None:
     query = sql.SQL(
-        "SELECT agent_id, version, mcp_server_url, llm_endpoint_name, "
-        "system_prompt, tags, created_at, updated_at "
+        "SELECT agent_id, version, mcp_server_url, tags, created_at, updated_at "
         "FROM {} WHERE agent_id = %s AND version = %s"
     ).format(_table("agent_versions"))
     with conn.cursor() as cur:
@@ -150,18 +149,14 @@ def upsert_agent_version(
     agent_id: str,
     version: str,
     mcp_server_url: str,
-    llm_endpoint_name: str | None,
-    system_prompt: str | None,
     tags: dict[str, Any] | None,
 ) -> None:
     query = sql.SQL(
         "INSERT INTO {} "
-        "(agent_id, version, mcp_server_url, llm_endpoint_name, system_prompt, tags) "
-        "VALUES (%s, %s, %s, %s, %s, %s) "
+        "(agent_id, version, mcp_server_url, tags) "
+        "VALUES (%s, %s, %s, %s) "
         "ON CONFLICT (agent_id, version) DO UPDATE SET "
         "mcp_server_url = EXCLUDED.mcp_server_url, "
-        "llm_endpoint_name = EXCLUDED.llm_endpoint_name, "
-        "system_prompt = EXCLUDED.system_prompt, "
         "tags = EXCLUDED.tags, "
         "updated_at = now()"
     ).format(_table("agent_versions"))
@@ -172,8 +167,6 @@ def upsert_agent_version(
                 agent_id,
                 version,
                 mcp_server_url,
-                llm_endpoint_name,
-                system_prompt,
                 json.dumps(tags or {}),
             ),
         )
@@ -206,6 +199,26 @@ def upsert_agent_protocol_card(
         )
 
 
+def _next_agent_version(conn, agent_id: str, version: str) -> str:
+    query = sql.SQL(
+        "SELECT version FROM {} WHERE agent_id = %s"
+    ).format(_table("agent_versions"))
+    with conn.cursor() as cur:
+        cur.execute(query, (agent_id,))
+        rows = cur.fetchall()
+    existing = [row["version"] for row in rows]
+    if not existing:
+        return version
+    if version not in existing:
+        return version
+    max_version = 0
+    for value in existing:
+        match = re.match(r"v?(\d+)$", str(value))
+        if match:
+            max_version = max(max_version, int(match.group(1)))
+    return f"v{max_version + 1}" if max_version else f"{version}-1"
+
+
 def register_agent_card(
     conn,
     *,
@@ -216,12 +229,13 @@ def register_agent_card(
     status: str,
     version: str,
     mcp_server_url: str,
-    llm_endpoint_name: str | None,
-    system_prompt: str | None,
     tags: dict[str, Any] | None,
     protocol: str,
     card_json: dict[str, Any],
 ) -> None:
+    version_to_use = _next_agent_version(conn, agent_id, version)
+    if isinstance(card_json, dict):
+        card_json = {**card_json, "agentVersion": version_to_use}
     upsert_agent(
         conn,
         agent_id=agent_id,
@@ -229,21 +243,19 @@ def register_agent_card(
         description=description,
         owner=owner,
         status=status,
-        default_version=version,
+        default_version=version_to_use,
     )
     upsert_agent_version(
         conn,
         agent_id=agent_id,
-        version=version,
+        version=version_to_use,
         mcp_server_url=mcp_server_url,
-        llm_endpoint_name=llm_endpoint_name,
-        system_prompt=system_prompt,
         tags=tags,
     )
     upsert_agent_protocol_card(
         conn,
         agent_id=agent_id,
-        version=version,
+        version=version_to_use,
         protocol=protocol,
         card_json=card_json,
     )

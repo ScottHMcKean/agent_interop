@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-from uuid import uuid4
-
 import pytest
 
 from registry_app.db import get_connection
@@ -11,6 +9,18 @@ from registry_app.services.a2a_executor import RegistryAgentExecutor
 
 
 def _insert_seed(conn, schema: str, agent_id: str, card: dict) -> None:
+    conn.execute(
+        f"DELETE FROM {schema}.agent_protocol_cards WHERE agent_id = %s",
+        (agent_id,),
+    )
+    conn.execute(
+        f"DELETE FROM {schema}.agent_versions WHERE agent_id = %s",
+        (agent_id,),
+    )
+    conn.execute(
+        f"DELETE FROM {schema}.agents WHERE agent_id = %s",
+        (agent_id,),
+    )
     conn.execute(
         f"""
         INSERT INTO {schema}.agents (
@@ -36,12 +46,10 @@ def _insert_seed(conn, schema: str, agent_id: str, card: dict) -> None:
     conn.execute(
         f"""
         INSERT INTO {schema}.agent_versions (
-            agent_id, version, mcp_server_url, llm_endpoint_name, system_prompt, tags
-        ) VALUES (%s, %s, %s, %s, %s, %s)
+            agent_id, version, mcp_server_url, tags
+        ) VALUES (%s, %s, %s, %s)
         ON CONFLICT (agent_id, version) DO UPDATE SET
             mcp_server_url = EXCLUDED.mcp_server_url,
-            llm_endpoint_name = EXCLUDED.llm_endpoint_name,
-            system_prompt = EXCLUDED.system_prompt,
             tags = EXCLUDED.tags,
             updated_at = now()
         """,
@@ -49,8 +57,6 @@ def _insert_seed(conn, schema: str, agent_id: str, card: dict) -> None:
             agent_id,
             "v1",
             "https://example.com/mcp",
-            "test-endpoint",
-            "You are a test agent.",
             json.dumps({"source": "pytest"}),
         ),
     )
@@ -75,16 +81,18 @@ def _insert_seed(conn, schema: str, agent_id: str, card: dict) -> None:
 @pytest.mark.integration
 def test_registry_mcp_cards_roundtrip(config: dict) -> None:
     schema = config.get("registry_schema", "agent_registry")
-    agent_id = f"pytest-{uuid4().hex[:8]}"
+    agent_id = "test-agent"
     card = {
-        "name": agent_id,
-        "description": "pytest card",
+        "name": "Test Agent",
+        "description": "Test Agent card",
         "url": "/a2a",
         "version": "1.0.0",
         "defaultInputModes": ["text"],
         "defaultOutputModes": ["text"],
         "capabilities": {"streaming": False},
-        "skills": [{"id": agent_id, "name": agent_id, "description": "pytest"}],
+        "skills": [
+            {"id": agent_id, "name": "Test Agent", "description": "pytest"}
+        ],
     }
     with get_connection() as conn:
         _insert_seed(conn, schema, agent_id, card)
@@ -95,22 +103,24 @@ def test_registry_mcp_cards_roundtrip(config: dict) -> None:
 
         fetched = get_agent_card(conn, agent_id, protocol="a2a")
         assert fetched
-        assert fetched["card_json"]["name"] == agent_id
+    assert fetched["card_json"]["name"] == "Test Agent"
 
 
 @pytest.mark.integration
 def test_a2a_gateway_list_agents_action(config: dict) -> None:
     schema = config.get("registry_schema", "agent_registry")
-    agent_id = f"pytest-{uuid4().hex[:8]}"
+    agent_id = "test-agent"
     card = {
-        "name": agent_id,
-        "description": "pytest card",
+        "name": "Test Agent",
+        "description": "Test Agent card",
         "url": "/a2a",
         "version": "1.0.0",
         "defaultInputModes": ["text"],
         "defaultOutputModes": ["text"],
         "capabilities": {"streaming": False},
-        "skills": [{"id": agent_id, "name": agent_id, "description": "pytest"}],
+        "skills": [
+            {"id": agent_id, "name": "Test Agent", "description": "pytest"}
+        ],
     }
     with get_connection() as conn:
         _insert_seed(conn, schema, agent_id, card)
