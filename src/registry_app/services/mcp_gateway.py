@@ -203,7 +203,13 @@ def register_gateway_tools(app) -> None:
     @app.tool(
         name="invoke_agent",
         description=(
-            "Invoke a registered A2A agent by ID with a structured task payload."
+            "Invoke a registered A2A agent by ID with a structured task payload. "
+            'Required payload shape: task={"goal": "...", "input": {...}, '
+            '"metadata": {...}}. The goal is required; input/metadata are optional '
+            "objects (use {} when empty). Example: "
+            '{"agent_id": "test-agent", "task": {"goal": "list agents", '
+            '"input": {"query": "latest"}, "metadata": {"source": "mcp"}}, '
+            '"timeout_seconds": 600}.'
         ),
     )
     async def invoke_agent_tool(
