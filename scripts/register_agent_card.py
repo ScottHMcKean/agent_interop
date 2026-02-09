@@ -17,8 +17,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Register an A2A agent card.")
     parser.add_argument("--card", required=True, help="Path to agent card JSON.")
     parser.add_argument("--agent-id", required=True)
-    parser.add_argument("--version", required=True)
-    parser.add_argument("--mcp-server-url", required=True)
+    parser.add_argument("--version", type=int, default=1)
+    parser.add_argument("--api-url")
     parser.add_argument("--owner", default="self-registered")
     parser.add_argument("--status", default="active")
     parser.add_argument("--protocol", default="a2a")
@@ -28,7 +28,7 @@ def main() -> None:
     payload = {
         "agent_id": args.agent_id,
         "version": args.version,
-        "mcp_server_url": args.mcp_server_url,
+        "api_url": args.api_url,
         "owner": args.owner,
         "status": args.status,
         "protocol": args.protocol,
@@ -46,7 +46,7 @@ def main() -> None:
             owner=request.owner,
             status=request.status,
             version=request.version,
-            mcp_server_url=request.mcp_server_url,
+            api_url=request.api_url,
             tags=request.tags,
             protocol=request.protocol,
             card_json=request.card.model_dump(),

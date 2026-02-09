@@ -39,3 +39,6 @@ where = ["src"]
 markers = [
   "integration: integration tests that require Lakebase access",
 ]
+filterwarnings = [
+  "ignore:'HTTP_413_REQUEST_ENTITY_TOO_LARGE' is deprecated:DeprecationWarning:a2a\\.server\\.apps\\.jsonrpc\\.fastapi_app",
+]

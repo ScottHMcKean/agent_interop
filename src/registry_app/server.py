@@ -7,9 +7,12 @@ from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill
+from pathlib import Path
+
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
 
 from registry_app.services.a2a_executor import RegistryAgentExecutor
 from registry_app.services.http_api import build_registry_api
@@ -79,6 +82,7 @@ def build_app() -> Starlette:
     registry_api = build_registry_api()
     mcp_handler, mcp_lifespan = build_mcp_app()
     test_agent_app = build_test_agent_app()
+    assets_dir = Path(__file__).resolve().parent / "assets"
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
@@ -93,6 +97,7 @@ def build_app() -> Starlette:
             Route("/mcp", endpoint=_MountRootProxy(mcp_handler)),
             Route("/a2a", endpoint=_MountRootProxy(a2a_app)),
             Route("/test-agent", endpoint=_MountRootProxy(test_agent_app)),
+            Mount("/assets", app=StaticFiles(directory=assets_dir), name="assets"),
             Mount("/registry", app=registry_api),
             Mount("/mcp", app=mcp_handler),
             Mount("/a2a", app=a2a_app),

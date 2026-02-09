@@ -11,6 +11,8 @@ from a2a.types import TaskState, TextPart
 from a2a.utils import new_agent_text_message, new_task
 from a2a.utils.errors import ServerError
 from a2a.types import InvalidParamsError, UnsupportedOperationError
+import httpx
+from databricks.sdk import WorkspaceClient
 from registry_app.config import load_settings
 from registry_app.db import get_connection
 from registry_app.registry import (
@@ -43,6 +45,7 @@ def _build_agent_call_hint() -> str:
 class RegistryAgentExecutor(AgentExecutor):
     def __init__(self) -> None:
         self.settings = load_settings()
+        self.workspace_client = WorkspaceClient()
 
     async def execute(
         self,
@@ -121,12 +124,55 @@ class RegistryAgentExecutor(AgentExecutor):
         if not agent_version:
             return f"No version data for '{agent_id}'."
 
+        api_url = agent_version.get("api_url")
+        if not api_url:
+            return (
+                f"Agent '{agent_id}' is missing api_url. "
+                "Register an API endpoint to enable invocation."
+            )
+
+        headers = {}
+        try:
+            headers = self.workspace_client.config.authenticate()
+        except Exception:
+            headers = {}
+
+        metadata = payload.get("metadata", {}) if isinstance(payload, dict) else {}
+        request_payload = {
+            "input": [{"role": "user", "content": prompt}],
+            "metadata": metadata,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(api_url, json=request_payload, headers=headers)
+                content_type = response.headers.get("content-type")
+                if response.content:
+                    try:
+                        parsed = response.json()
+                    except json.JSONDecodeError:
+                        parsed = {"raw_text": response.text}
+                else:
+                    parsed = {"raw_text": "", "note": "Empty response body"}
+                result = {
+                    "request_type": "input_messages",
+                    "request_body": request_payload,
+                    "status_code": response.status_code,
+                    "content_type": content_type,
+                    "payload": parsed,
+                }
+        except Exception as exc:
+            return json.dumps(
+                {"agent": agent, "agent_card": card, "error": str(exc)},
+                indent=2,
+                default=str,
+            )
+
         response = {
             "agent": agent,
             "agent_card": card,
-            "input": prompt,
+            "result": result,
         }
-        return json.dumps(response, indent=2)
+        return json.dumps(response, indent=2, default=str)
 
     async def cancel(
         self, context: RequestContext, event_queue: EventQueue

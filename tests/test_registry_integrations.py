@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+
+import psycopg
 import pytest
 
 from registry_app.db import get_connection
@@ -9,6 +11,9 @@ from registry_app.services.a2a_executor import RegistryAgentExecutor
 
 
 def _insert_seed(conn, schema: str, agent_id: str, card: dict) -> None:
+    conn.execute(
+        f"ALTER TABLE {schema}.agent_versions ADD COLUMN IF NOT EXISTS api_url TEXT"
+    )
     conn.execute(
         f"DELETE FROM {schema}.agent_protocol_cards WHERE agent_id = %s",
         (agent_id,),
@@ -40,23 +45,23 @@ def _insert_seed(conn, schema: str, agent_id: str, card: dict) -> None:
             "Test agent",
             "test",
             "active",
-            "v1",
+            1,
         ),
     )
     conn.execute(
         f"""
         INSERT INTO {schema}.agent_versions (
-            agent_id, version, mcp_server_url, tags
+            agent_id, version, api_url, tags
         ) VALUES (%s, %s, %s, %s)
         ON CONFLICT (agent_id, version) DO UPDATE SET
-            mcp_server_url = EXCLUDED.mcp_server_url,
+            api_url = EXCLUDED.api_url,
             tags = EXCLUDED.tags,
             updated_at = now()
         """,
         (
             agent_id,
-            "v1",
-            "https://example.com/mcp",
+            1,
+            None,
             json.dumps({"source": "pytest"}),
         ),
     )
@@ -71,7 +76,7 @@ def _insert_seed(conn, schema: str, agent_id: str, card: dict) -> None:
         """,
         (
             agent_id,
-            "v1",
+            1,
             "a2a",
             json.dumps(card),
         ),
@@ -90,9 +95,7 @@ def test_registry_mcp_cards_roundtrip(config: dict) -> None:
         "defaultInputModes": ["text"],
         "defaultOutputModes": ["text"],
         "capabilities": {"streaming": False},
-        "skills": [
-            {"id": agent_id, "name": "Test Agent", "description": "pytest"}
-        ],
+        "skills": [{"id": agent_id, "name": "Test Agent", "description": "pytest"}],
     }
     with get_connection() as conn:
         _insert_seed(conn, schema, agent_id, card)
@@ -118,9 +121,7 @@ def test_a2a_gateway_list_agents_action(config: dict) -> None:
         "defaultInputModes": ["text"],
         "defaultOutputModes": ["text"],
         "capabilities": {"streaming": False},
-        "skills": [
-            {"id": agent_id, "name": "Test Agent", "description": "pytest"}
-        ],
+        "skills": [{"id": agent_id, "name": "Test Agent", "description": "pytest"}],
     }
     with get_connection() as conn:
         _insert_seed(conn, schema, agent_id, card)
@@ -131,3 +132,37 @@ def test_a2a_gateway_list_agents_action(config: dict) -> None:
     response = executor._handle_list_agents()  # keeps coverage focused on A2A flow
     data = json.loads(response)
     assert any(agent["agent_id"] == agent_id for agent in data["agents"])
+
+
+@pytest.mark.integration
+def test_agent_versions_primary_key_enforced(config: dict) -> None:
+    schema = config.get("registry_schema", "agent_registry")
+    agent_id = "test-agent"
+    card = {
+        "name": "Test Agent",
+        "description": "Test Agent card",
+        "url": "/a2a",
+        "version": "1.0.0",
+        "defaultInputModes": ["text"],
+        "defaultOutputModes": ["text"],
+        "capabilities": {"streaming": False},
+        "skills": [{"id": agent_id, "name": "Test Agent", "description": "pytest"}],
+    }
+    with get_connection() as conn:
+        _insert_seed(conn, schema, agent_id, card)
+        conn.commit()
+
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(
+                f"""
+                INSERT INTO {schema}.agent_versions (
+                    agent_id, version, api_url, tags
+                ) VALUES (%s, %s, %s, %s)
+                """,
+                (
+                    agent_id,
+                    1,
+                    None,
+                    json.dumps({"source": "pytest-dup"}),
+                ),
+            )

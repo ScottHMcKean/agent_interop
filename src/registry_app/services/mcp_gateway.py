@@ -74,10 +74,12 @@ def _list_available_agents(
     skills: list[str] | None,
     limit: int,
     include_full_card: bool,
+    list_all_versions: bool,
 ) -> dict[str, Any]:
     normalized_limit = max(1, min(100, int(limit)))
     rows = list_agent_cards(conn, protocol="a2a")
     agents = []
+    seen = set()
     for row in rows:
         card_json = _coerce_card_json(row.get("card_json"))
         card_tags = _extract_tags(card_json)
@@ -86,6 +88,10 @@ def _list_available_agents(
             continue
         if skills and not _matches_skills(skills, card_skills):
             continue
+        agent_id = row.get("agent_id")
+        if not list_all_versions and agent_id in seen:
+            continue
+        seen.add(agent_id)
         agents.append(_build_agent_summary(row, include_full_card))
         if len(agents) >= normalized_limit:
             break
@@ -182,7 +188,9 @@ def register_gateway_tools(app) -> None:
         name="list_available_agents",
         description=(
             "List A2A agents registered in the Lakehouse, "
-            "optionally filtered by tags or skills."
+            "optionally filtered by tags or skills. "
+            "By default only the most recent version per agent is returned; "
+            "set list_all_versions=true to include all versions."
         ),
     )
     async def list_available_agents_tool(
@@ -190,6 +198,7 @@ def register_gateway_tools(app) -> None:
         skills: list[str] | None = None,
         limit: int = 20,
         include_full_card: bool = False,
+        list_all_versions: bool = False,
     ) -> dict[str, Any]:
         with get_connection() as conn:
             return _list_available_agents(
@@ -198,6 +207,7 @@ def register_gateway_tools(app) -> None:
                 skills=skills,
                 limit=limit,
                 include_full_card=include_full_card,
+                list_all_versions=list_all_versions,
             )
 
     @app.tool(

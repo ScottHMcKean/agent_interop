@@ -38,7 +38,7 @@ def get_agent(conn, agent_id: str) -> dict[str, Any] | None:
 
 def list_versions(conn, agent_id: str) -> list[dict[str, Any]]:
     query = sql.SQL(
-        "SELECT agent_id, version, mcp_server_url, tags, created_at, updated_at "
+        "SELECT agent_id, version, api_url, tags, created_at, updated_at "
         "FROM {} WHERE agent_id = %s ORDER BY version"
     ).format(_table("agent_versions"))
     with conn.cursor() as cur:
@@ -46,15 +46,20 @@ def list_versions(conn, agent_id: str) -> list[dict[str, Any]]:
         return list(cur.fetchall())
 
 
-def get_version(
-    conn, agent_id: str, version: str
-) -> dict[str, Any] | None:
+def get_version(conn, agent_id: str, version: int | str) -> dict[str, Any] | None:
     query = sql.SQL(
-        "SELECT agent_id, version, mcp_server_url, tags, created_at, updated_at "
-        "FROM {} WHERE agent_id = %s AND version = %s"
+        "SELECT agent_id, version, api_url, tags, created_at, updated_at "
+        "FROM {} WHERE agent_id = %s AND CAST(version AS TEXT) = ANY(%s)"
     ).format(_table("agent_versions"))
+    version_text = str(version)
+    version_value = _parse_version_int(version_text)
+    candidates = [version_text]
+    if version_value is not None:
+        candidates.append(str(version_value))
+        candidates.append(f"v{version_value}")
+    candidates = list(dict.fromkeys(candidates))
     with conn.cursor() as cur:
-        cur.execute(query, (agent_id, version))
+        cur.execute(query, (agent_id, candidates))
         return cur.fetchone()
 
 
@@ -69,12 +74,10 @@ def get_default_version(conn, agent_id: str) -> dict[str, Any] | None:
     return versions[-1] if versions else None
 
 
-def list_agent_cards(
-    conn, protocol: str = "a2a"
-) -> list[dict[str, Any]]:
+def list_agent_cards(conn, protocol: str = "a2a") -> list[dict[str, Any]]:
     query = sql.SQL(
         "SELECT agent_id, version, protocol, card_json, updated_at "
-        "FROM {} WHERE protocol = %s ORDER BY agent_id, version"
+        "FROM {} WHERE protocol = %s ORDER BY agent_id, version DESC"
     ).format(_table("agent_protocol_cards"))
     with conn.cursor() as cur:
         cur.execute(query, (protocol,))
@@ -123,7 +126,7 @@ def upsert_agent(
     description: str,
     owner: str,
     status: str,
-    default_version: str,
+    default_version: int,
 ) -> None:
     query = sql.SQL(
         "INSERT INTO {} (agent_id, name, description, owner, status, default_version) "
@@ -147,16 +150,16 @@ def upsert_agent_version(
     conn,
     *,
     agent_id: str,
-    version: str,
-    mcp_server_url: str,
+    version: int,
+    api_url: str | None,
     tags: dict[str, Any] | None,
 ) -> None:
     query = sql.SQL(
         "INSERT INTO {} "
-        "(agent_id, version, mcp_server_url, tags) "
+        "(agent_id, version, api_url, tags) "
         "VALUES (%s, %s, %s, %s) "
         "ON CONFLICT (agent_id, version) DO UPDATE SET "
-        "mcp_server_url = EXCLUDED.mcp_server_url, "
+        "api_url = EXCLUDED.api_url, "
         "tags = EXCLUDED.tags, "
         "updated_at = now()"
     ).format(_table("agent_versions"))
@@ -165,8 +168,8 @@ def upsert_agent_version(
             query,
             (
                 agent_id,
-                version,
-                mcp_server_url,
+                int(version),
+                api_url,
                 json.dumps(tags or {}),
             ),
         )
@@ -199,24 +202,35 @@ def upsert_agent_protocol_card(
         )
 
 
-def _next_agent_version(conn, agent_id: str, version: str) -> str:
-    query = sql.SQL(
-        "SELECT version FROM {} WHERE agent_id = %s"
-    ).format(_table("agent_versions"))
+def _parse_version_int(value: str | int | None) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    try:
+        return int(value)
+    except ValueError:
+        match = re.match(r"v?(\\d+)$", str(value))
+        return int(match.group(1)) if match else None
+
+
+def _next_agent_version(conn, agent_id: str, version: int | str) -> int:
+    query = sql.SQL("SELECT version FROM {} WHERE agent_id = %s").format(
+        _table("agent_versions")
+    )
     with conn.cursor() as cur:
         cur.execute(query, (agent_id,))
         rows = cur.fetchall()
-    existing = [row["version"] for row in rows]
-    if not existing:
-        return version
-    if version not in existing:
-        return version
-    max_version = 0
-    for value in existing:
-        match = re.match(r"v?(\d+)$", str(value))
-        if match:
-            max_version = max(max_version, int(match.group(1)))
-    return f"v{max_version + 1}" if max_version else f"{version}-1"
+    parsed_versions = [
+        parsed
+        for parsed in (_parse_version_int(row["version"]) for row in rows)
+        if parsed is not None
+    ]
+    max_version = max(parsed_versions, default=0)
+    requested = _parse_version_int(version) or 1
+    if requested > max_version:
+        return requested
+    return max_version + 1
 
 
 def register_agent_card(
@@ -227,8 +241,8 @@ def register_agent_card(
     description: str,
     owner: str,
     status: str,
-    version: str,
-    mcp_server_url: str,
+    version: int | str,
+    api_url: str | None,
     tags: dict[str, Any] | None,
     protocol: str,
     card_json: dict[str, Any],
@@ -249,7 +263,7 @@ def register_agent_card(
         conn,
         agent_id=agent_id,
         version=version_to_use,
-        mcp_server_url=mcp_server_url,
+        api_url=api_url,
         tags=tags,
     )
     upsert_agent_protocol_card(

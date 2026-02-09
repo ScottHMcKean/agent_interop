@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +42,11 @@ def load_settings() -> Settings:
         )
 
     workspace_url = config.get("workspace_url") or None
-    registry_base_url = config.get("registry_base_url") or workspace_url
+    registry_base_url = (
+        config.get("registry_base_url")
+        or os.getenv("DATABRICKS_APP_URL")
+        or workspace_url
+    )
     if not registry_base_url:
         try:
             from databricks.sdk import WorkspaceClient

@@ -45,7 +45,7 @@ def test_list_available_agents_filters_and_limits():
     rows = [
         {
             "agent_id": "agent-1",
-            "version": "1.0",
+            "version": 1,
             "protocol": "a2a",
             "card_json": {
                 "name": "Agent One",
@@ -53,12 +53,12 @@ def test_list_available_agents_filters_and_limits():
                 "url": "https://example.com/a2a",
                 "tags": ["alpha", "beta"],
                 "skills": [{"id": "skill-1"}],
-                "agentVersion": "1.0",
+                "agentVersion": 1,
             },
         },
         {
             "agent_id": "agent-2",
-            "version": "1.0",
+            "version": 1,
             "protocol": "a2a",
             "card_json": {
                 "name": "Agent Two",
@@ -66,7 +66,7 @@ def test_list_available_agents_filters_and_limits():
                 "url": "https://example.com/a2a",
                 "tags": ["beta"],
                 "skills": [{"id": "skill-2"}],
-                "agentVersion": "1.0",
+                "agentVersion": 1,
             },
         },
     ]
@@ -77,6 +77,7 @@ def test_list_available_agents_filters_and_limits():
         skills=["skill-1"],
         limit=5,
         include_full_card=False,
+        list_all_versions=False,
     )
     assert len(result["agents"]) == 1
     assert result["agents"][0]["human_readable_id"] == "agent-1"
@@ -86,7 +87,7 @@ def test_list_available_agents_include_full_card():
     rows = [
         {
             "agent_id": "agent-1",
-            "version": "1.0",
+            "version": 1,
             "protocol": "a2a",
             "card_json": json.dumps(
                 {
@@ -94,7 +95,7 @@ def test_list_available_agents_include_full_card():
                     "description": "First agent",
                     "url": "https://example.com/a2a",
                     "tags": ["alpha"],
-                    "agentVersion": "1.0",
+                    "agentVersion": 1,
                 }
             ),
         }
@@ -106,22 +107,88 @@ def test_list_available_agents_include_full_card():
         skills=None,
         limit=1,
         include_full_card=True,
+        list_all_versions=False,
     )
     assert "card" in result["agents"][0]
     assert result["agents"][0]["card"]["name"] == "Agent One"
+
+
+def test_list_available_agents_latest_only_by_default():
+    rows = [
+        {
+            "agent_id": "agent-1",
+            "version": 2,
+            "protocol": "a2a",
+            "card_json": {
+                "name": "Agent One",
+                "description": "Second version",
+                "url": "https://example.com/a2a",
+                "agentVersion": 2,
+            },
+        },
+        {
+            "agent_id": "agent-1",
+            "version": 1,
+            "protocol": "a2a",
+            "card_json": {
+                "name": "Agent One",
+                "description": "First version",
+                "url": "https://example.com/a2a",
+                "agentVersion": 1,
+            },
+        },
+    ]
+    conn = FakeConn(rows)
+    result = _list_available_agents(
+        conn,
+        tags=None,
+        skills=None,
+        limit=10,
+        include_full_card=False,
+        list_all_versions=False,
+    )
+    assert len(result["agents"]) == 1
+    assert result["agents"][0]["agent_version"] == 2
+
+
+def test_list_available_agents_all_versions_when_requested():
+    rows = [
+        {
+            "agent_id": "agent-1",
+            "version": 2,
+            "protocol": "a2a",
+            "card_json": {"name": "Agent One", "url": "https://example.com/a2a"},
+        },
+        {
+            "agent_id": "agent-1",
+            "version": 1,
+            "protocol": "a2a",
+            "card_json": {"name": "Agent One", "url": "https://example.com/a2a"},
+        },
+    ]
+    conn = FakeConn(rows)
+    result = _list_available_agents(
+        conn,
+        tags=None,
+        skills=None,
+        limit=10,
+        include_full_card=False,
+        list_all_versions=True,
+    )
+    assert len(result["agents"]) == 2
 
 
 def test_invoke_agent_success():
     rows = [
         {
             "agent_id": "agent-1",
-            "version": "1.0",
+            "version": 1,
             "protocol": "a2a",
             "card_json": {
                 "name": "Agent One",
                 "description": "First agent",
                 "url": "https://example.com/a2a",
-                "agentVersion": "1.0",
+                "agentVersion": 1,
                 "authSchemes": [{"scheme": "none"}],
             },
         }

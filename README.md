@@ -175,7 +175,7 @@ uv run uvicorn registry_app.server:app --host 0.0.0.0 --port 8000
 ## Registry UI
 
 ```
-http://localhost:8000/registry/ui
+http://localhost:8000/registry/list
 ```
 
 The UI shows database status, MCP/A2A endpoints, and lets you browse agent cards.

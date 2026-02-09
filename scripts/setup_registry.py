@@ -75,7 +75,6 @@ def main() -> None:
     lakebase_host = config.get("lakebase_host")
     lakebase_db = config.get("lakebase_db", "databricks_postgres")
     lakebase_user = config.get("lakebase_user")
-    default_mcp_server_url = config.get("default_mcp_server_url")
     a2a_base_url = "/a2a"
 
     w = WorkspaceClient()
@@ -100,21 +99,25 @@ def main() -> None:
     create_sql = f"""
 CREATE SCHEMA IF NOT EXISTS {registry_schema};
 
+DROP TABLE IF EXISTS {registry_schema}.agent_protocol_cards;
+DROP TABLE IF EXISTS {registry_schema}.agent_versions;
+DROP TABLE IF EXISTS {registry_schema}.agents;
+
 CREATE TABLE IF NOT EXISTS {registry_schema}.agents (
     agent_id TEXT PRIMARY KEY,
     name TEXT,
     description TEXT,
     owner TEXT,
     status TEXT,
-    default_version TEXT,
+    default_version INTEGER,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS {registry_schema}.agent_versions (
     agent_id TEXT NOT NULL,
-    version TEXT NOT NULL,
-    mcp_server_url TEXT,
+    version INTEGER NOT NULL,
+    api_url TEXT,
     tags JSONB,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
@@ -124,7 +127,7 @@ CREATE TABLE IF NOT EXISTS {registry_schema}.agent_versions (
 
 CREATE TABLE IF NOT EXISTS {registry_schema}.agent_protocol_cards (
     agent_id TEXT NOT NULL,
-    version TEXT NOT NULL,
+    version INTEGER NOT NULL,
     protocol TEXT NOT NULL,
     card_json JSONB,
     updated_at TIMESTAMPTZ DEFAULT now(),
@@ -153,8 +156,8 @@ CREATE TABLE IF NOT EXISTS {registry_schema}.agent_protocol_cards (
             "description": "Test Agent for validating MCP and A2A flows.",
             "owner": "setup",
             "status": "active",
-            "version": "v1",
-            "mcp_server_url": default_mcp_server_url,
+            "version": 1,
+            "api_url": a2a_base_url,
             "card": {
                 **test_card,
                 "url": a2a_base_url,
@@ -180,12 +183,12 @@ ON CONFLICT (agent_id) DO UPDATE SET
 
     insert_versions = f"""
 INSERT INTO {registry_schema}.agent_versions (
-    agent_id, version, mcp_server_url, tags
+    agent_id, version, api_url, tags
 ) VALUES (
-    %(agent_id)s, %(version)s, %(mcp_server_url)s, %(tags)s
+    %(agent_id)s, %(version)s, %(api_url)s, %(tags)s
 )
 ON CONFLICT (agent_id, version) DO UPDATE SET
-    mcp_server_url = EXCLUDED.mcp_server_url,
+    api_url = EXCLUDED.api_url,
     tags = EXCLUDED.tags,
     updated_at = now();
 """
@@ -210,7 +213,7 @@ ON CONFLICT (agent_id, version, protocol) DO UPDATE SET
                 "owner": agent["owner"],
                 "status": agent["status"],
                 "version": agent["version"],
-                "mcp_server_url": agent["mcp_server_url"],
+                "api_url": agent.get("api_url"),
                 "tags": json.dumps({"source": "setup"}),
                 "protocol": "a2a",
                 "card_json": json.dumps(agent["card"]),

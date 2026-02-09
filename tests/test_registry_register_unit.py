@@ -19,6 +19,11 @@ class FakeCursor:
     def fetchall(self):
         return list(self.fetchall_rows)
 
+    def fetchone(self):
+        if self.fetchall_rows:
+            return self.fetchall_rows[0]
+        return {"max_version": 0}
+
     def __enter__(self):
         return self
 
@@ -43,8 +48,7 @@ class FakeConn:
 def test_register_agent_card_validates_payload():
     payload = {
         "agent_id": "demo/agent",
-        "version": "1.0.0",
-        "mcp_server_url": "https://example.com/mcp",
+        "version": 1,
         "card": {
             "name": "Demo Agent",
             "description": "Does things.",
@@ -61,7 +65,7 @@ def test_register_agent_card_validates_payload():
 
 
 def test_register_agent_card_missing_required_fields():
-    payload = {"agent_id": "demo/agent", "version": "1.0.0"}
+    payload = {"agent_id": "demo/agent", "version": 1}
     try:
         RegisterAgentCardRequest.model_validate(payload)
     except ValidationError as exc:
@@ -89,8 +93,8 @@ def test_register_agent_card_writes_rows():
         description="Does things.",
         owner="self-registered",
         status="active",
-        version="1.0.0",
-        mcp_server_url="https://example.com/mcp",
+        version=1,
+        api_url=None,
         tags={"source": "unit"},
         protocol="a2a",
         card_json=card,
@@ -105,7 +109,7 @@ def test_register_agent_card_writes_rows():
 
 def test_register_agent_card_increments_version_on_conflict():
     conn = FakeConn()
-    conn.cursor_obj.fetchall_rows = [{"version": "v2"}]
+    conn.cursor_obj.fetchall_rows = [{"version": 2}]
     card = {
         "name": "Demo Agent",
         "description": "Does things.",
@@ -123,12 +127,12 @@ def test_register_agent_card_increments_version_on_conflict():
         description="Does things.",
         owner="self-registered",
         status="active",
-        version="v2",
-        mcp_server_url="https://example.com/mcp",
+        version=2,
+        api_url=None,
         tags={"source": "unit"},
         protocol="a2a",
         card_json=card,
     )
     calls = conn.cursor_obj.calls
     payloads = [params for _query, params in calls if params and len(params) > 1]
-    assert any(params[1] == "v3" for params in payloads)
+    assert any(params[1] == 3 for params in payloads)

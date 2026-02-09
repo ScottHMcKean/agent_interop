@@ -37,8 +37,8 @@ class RegisterAgentCardRequest(BaseModel):
     agent_id: str = Field(..., description="Human readable agent id.")
     owner: str = "self-registered"
     status: str = "active"
-    version: str
-    mcp_server_url: str
+    version: int = 1
+    api_url: str | None = None
     tags: dict[str, Any] | None = None
     protocol: str = "a2a"
     card: AgentCardPayload
