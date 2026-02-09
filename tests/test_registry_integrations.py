@@ -79,7 +79,7 @@ def test_registry_mcp_cards_roundtrip(config: dict) -> None:
     card = {
         "name": agent_id,
         "description": "pytest card",
-        "url": "/api/a2a",
+        "url": "/a2a",
         "version": "1.0.0",
         "defaultInputModes": ["text"],
         "defaultOutputModes": ["text"],
@@ -105,7 +105,7 @@ def test_a2a_gateway_list_agents_action(config: dict) -> None:
     card = {
         "name": agent_id,
         "description": "pytest card",
-        "url": "/api/a2a",
+        "url": "/a2a",
         "version": "1.0.0",
         "defaultInputModes": ["text"],
         "defaultOutputModes": ["text"],

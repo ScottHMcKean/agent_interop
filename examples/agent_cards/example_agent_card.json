@@ -4,7 +4,7 @@
   "agentVersion": "0.1.0",
   "name": "Demo Agent",
   "description": "Example agent card for registry registration and discovery.",
-  "url": "https://example.com/api/a2a",
+  "url": "https://example.com/a2a",
   "authSchemes": [
     {
       "scheme": "none"

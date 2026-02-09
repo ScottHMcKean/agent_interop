@@ -14,6 +14,7 @@ class Settings:
     lakebase_db: str | None
     lakebase_user: str | None
     registry_schema: str
+    registry_base_url: str | None
     default_llm_endpoint: str | None
     default_system_prompt: str
 
@@ -46,6 +47,7 @@ def load_settings() -> Settings:
         lakebase_db=lakebase_db,
         lakebase_user=lakebase_user,
         registry_schema=config.get("registry_schema", "agent_registry"),
+        registry_base_url=config.get("registry_base_url"),
         default_llm_endpoint=config.get("default_llm_endpoint"),
         default_system_prompt=config.get(
             "default_system_prompt", "You are a helpful assistant."

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0",
+  "humanReadableId": "examples/test_agent",
+  "agentVersion": "0.1.0",
+  "name": "Test Agent",
+  "description": "Test Agent for registry registration and discovery.",
+  "url": "/test-agent",
+  "authSchemes": [
+    {
+      "scheme": "none"
+    }
+  ],
+  "defaultInputModes": [
+    "text"
+  ],
+  "defaultOutputModes": [
+    "text"
+  ],
+  "capabilities": {
+    "streaming": false
+  },
+  "skills": [
+    {
+      "id": "test_agent",
+      "name": "Test Agent",
+      "description": "Handles simple test tasks."
+    }
+  ]
+}

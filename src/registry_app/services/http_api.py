@@ -19,6 +19,10 @@ from registry_app.schemas import RegisterAgentCardRequest
 def build_registry_api() -> FastAPI:
     app = FastAPI(title="Agent Registry API")
 
+    @app.get("/")
+    def root_route():
+        return ui_route()
+
     @app.get("/status")
     def status_route():
         db_ok = False
@@ -33,8 +37,9 @@ def build_registry_api() -> FastAPI:
             db_error = str(exc)
         return {
             "database": {"ok": db_ok, "error": db_error},
-            "a2a": {"ok": True, "url": "/api/a2a"},
-            "mcp": {"ok": True, "url": "/api/mcp"},
+            "a2a": {"ok": True, "url": "/a2a"},
+            "mcp": {"ok": True, "url": "/mcp"},
+            "test_agent": {"ok": True, "url": "/test-agent"},
         }
 
     @app.get("/agents")
@@ -146,20 +151,21 @@ def build_registry_api() -> FastAPI:
     <script>
       async function loadStatus() {
         const statusEl = document.getElementById("status");
-        const resp = await fetch("/api/registry/status");
+        const resp = await fetch("/registry/status");
         const data = await resp.json();
         const dbClass = data.database.ok ? "ok" : "bad";
         statusEl.innerHTML = `
           <div>Database: <span class="${dbClass}">${data.database.ok}</span></div>
           <div>A2A: <span class="ok">${data.a2a.ok}</span> (${data.a2a.url})</div>
           <div>MCP: <span class="ok">${data.mcp.ok}</span> (${data.mcp.url})</div>
+          <div>Test Agent: <span class="ok">${data.test_agent.ok}</span> (${data.test_agent.url})</div>
         `;
       }
 
       async function loadAgents() {
         const tbody = document.querySelector("#agents tbody");
         tbody.innerHTML = "";
-        const resp = await fetch("/api/registry/agents");
+        const resp = await fetch("/registry/agents");
         const data = await resp.json();
         for (const agent of data.agents || []) {
           const tr = document.createElement("tr");
@@ -178,7 +184,7 @@ def build_registry_api() -> FastAPI:
       async function loadCard(agentId) {
         const pre = document.getElementById("card");
         pre.textContent = "Loading...";
-        const resp = await fetch(`/api/registry/agents/${agentId}/card`);
+        const resp = await fetch(`/registry/agents/${agentId}/card`);
         if (!resp.ok) {
           pre.textContent = "Card not found.";
           return;

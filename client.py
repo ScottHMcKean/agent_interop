@@ -47,7 +47,7 @@ async def main():
                 'parts': [
                     {'kind': 'text', 'text': 'List top 3 distribution centers by demand.'}
                 ],
-                'messageId': uuid4().hex,
+                'message_id': uuid4().hex,
             },
         }
         request = SendMessageRequest(

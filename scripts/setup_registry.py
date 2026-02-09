@@ -82,7 +82,7 @@ def main() -> None:
     lakebase_host = config.get("lakebase_host")
     lakebase_db = config.get("lakebase_db", "databricks_postgres")
     default_mcp_server_url = config.get("default_mcp_server_url")
-    a2a_base_url = config.get("a2a_base_url", "/api/a2a")
+    a2a_base_url = config.get("a2a_base_url", "/a2a")
 
     w = WorkspaceClient()
     print("Ensuring Lakebase instance...")

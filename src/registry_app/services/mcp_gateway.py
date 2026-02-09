@@ -6,6 +6,7 @@ import os
 from typing import Any, Callable, Iterable, Mapping
 
 from registry_app.services.a2a_client import A2AClientProtocol, build_a2a_client
+from registry_app.config import load_settings
 from registry_app.db import get_connection
 from registry_app.registry import get_agent_card, list_agent_cards
 
@@ -130,6 +131,18 @@ async def _invoke_agent(
             "agent_id": agent_id,
             "error": {"message": f"Missing a2a_url for agent_id: {agent_id}"},
         }
+    if isinstance(a2a_url, str) and a2a_url.startswith("/"):
+        settings = load_settings()
+        base_url = settings.registry_base_url
+        if not base_url:
+            return {
+                "status": "error",
+                "agent_id": agent_id,
+                "error": {
+                    "message": "Relative a2a_url requires registry_base_url in config."
+                },
+            }
+        a2a_url = base_url.rstrip("/") + a2a_url
 
     goal = task.get("goal")
     if not goal:
