@@ -1,0 +1,57 @@
+bundle:
+  name: agent-interop
+
+variables:
+  app_name:
+    default: mcp-agent-dock
+  registry_schema:
+    default: agent_registry
+  lakebase_instance_name:
+    default: agent-registry
+  lakebase_capacity:
+    default: CU_1
+  lakebase_retention_days:
+    default: 7
+  lakebase_db_name:
+    default: databricks_postgres
+
+targets:
+  dev:
+    workspace:
+      host: https://adb-984752964297111.11.azuredatabricks.net
+      root_path: /Users/${workspace.current_user.userName}/agent-interop
+
+resources:
+  database_instances:
+    agent_registry:
+      name: ${var.lakebase_instance_name}
+      capacity: ${var.lakebase_capacity}
+      retention_window_in_days: ${var.lakebase_retention_days}
+
+  apps:
+    registry_app:
+      name: ${var.app_name}
+      description: MCP-first registry with A2A gateway (mcp-agent-dock).
+      source_code_path: .
+      permissions:
+        - level: CAN_MANAGE
+          user_name: ${workspace.current_user.userName}
+      resources:
+        - name: registry-db
+          description: Lakebase Postgres database backing the agent registry.
+          database:
+            instance_name: ${resources.database_instances.agent_registry.name}
+            database_name: ${var.lakebase_db_name}
+            permission: CAN_CONNECT_AND_CREATE
+
+  jobs:
+    lakebase_setup:
+      name: ${var.app_name}-lakebase-setup
+      tasks:
+        - task_key: setup
+          notebook_task:
+            notebook_path: ./notebooks/setup_lakebase.ipynb
+            base_parameters:
+              app_name: ${var.app_name}
+              instance_name: ${var.lakebase_instance_name}
+              schema: ${var.registry_schema}

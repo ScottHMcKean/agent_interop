@@ -18,14 +18,23 @@ def get_connection() -> Iterator[psycopg.Connection]:
         dsn = settings.lakebase_dsn
     else:
         host = settings.lakebase_host
+        if not host and settings.lakebase_instance_name:
+            ws = WorkspaceClient()
+            instance = ws.database.get_database_instance(
+                name=settings.lakebase_instance_name
+            )
+            host = getattr(instance, "read_write_dns", None)
         if not host:
-            raise RuntimeError("Missing lakebase_host in config.")
+            raise RuntimeError(
+                "Lakebase host not configured: set lakebase_host or "
+                "lakebase_instance_name in config.yaml."
+            )
         if ":" in host:
             host, port = host.split(":", 1)
         else:
             port = "5432"
         ws = WorkspaceClient()
-        user = ws.current_user.me().user_name
+        user = settings.lakebase_user or ws.current_user.me().user_name
         token = ws.config.oauth_token().access_token
         db_name = settings.lakebase_db or "databricks_postgres"
         dsn = (

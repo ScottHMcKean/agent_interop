@@ -92,6 +92,31 @@ def build_test_agent_card() -> AgentCard:
     )
 
 
+def build_test_agent_card_payload() -> dict[str, Any]:
+    return {
+        "schemaVersion": "1.0",
+        "humanReadableId": "examples/test_agent",
+        "agentVersion": "0.1.0",
+        "name": "Test Agent",
+        "description": "Local Test Agent for testing handshake and payloads.",
+        "url": "/test-agent",
+        "authSchemes": [{"scheme": "none"}],
+        "defaultInputModes": ["text"],
+        "defaultOutputModes": ["text"],
+        "capabilities": {"streaming": False},
+        "skills": [
+            {
+                "id": "test_agent",
+                "name": "Test Agent",
+                "description": "Returns a hello-world response with handshake details.",
+                "tags": ["test", "a2a"],
+                "examples": ['{"action": "list_agents"}'],
+            }
+        ],
+        "supportsAuthenticatedExtendedCard": False,
+    }
+
+
 def build_test_agent_app() -> Starlette:
     request_handler = DefaultRequestHandler(
         agent_executor=TestAgentExecutor(),

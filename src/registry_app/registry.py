@@ -14,6 +14,56 @@ def _table(name: str) -> sql.Composed:
     return sql.SQL(".").join([sql.Identifier(schema), sql.Identifier(name)])
 
 
+def bootstrap_schema(conn) -> None:
+    schema = load_settings().registry_schema
+    schema_ident = sql.Identifier(schema)
+    with conn.cursor() as cur:
+        cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(schema_ident))
+        cur.execute(
+            sql.SQL(
+                "CREATE TABLE IF NOT EXISTS {}.agents ("
+                "agent_id TEXT PRIMARY KEY, "
+                "name TEXT, "
+                "description TEXT, "
+                "owner TEXT, "
+                "status TEXT, "
+                "default_version TEXT, "
+                "created_at TIMESTAMPTZ DEFAULT now(), "
+                "updated_at TIMESTAMPTZ DEFAULT now()"
+                ")"
+            ).format(schema_ident)
+        )
+        cur.execute(
+            sql.SQL(
+                "CREATE TABLE IF NOT EXISTS {schema}.agent_versions ("
+                "agent_id TEXT NOT NULL, "
+                "version TEXT NOT NULL, "
+                "api_url TEXT, "
+                "tags JSONB, "
+                "created_at TIMESTAMPTZ DEFAULT now(), "
+                "updated_at TIMESTAMPTZ DEFAULT now(), "
+                "PRIMARY KEY (agent_id, version), "
+                "FOREIGN KEY (agent_id) REFERENCES {schema}.agents(agent_id)"
+                ")"
+            ).format(schema=schema_ident)
+        )
+        cur.execute(
+            sql.SQL(
+                "CREATE TABLE IF NOT EXISTS {schema}.agent_protocol_cards ("
+                "agent_id TEXT NOT NULL, "
+                "version TEXT NOT NULL, "
+                "protocol TEXT NOT NULL, "
+                "card_json JSONB, "
+                "updated_at TIMESTAMPTZ DEFAULT now(), "
+                "PRIMARY KEY (agent_id, version, protocol), "
+                "FOREIGN KEY (agent_id, version) "
+                "REFERENCES {schema}.agent_versions(agent_id, version)"
+                ")"
+            ).format(schema=schema_ident)
+        )
+    conn.commit()
+
+
 def list_agents(conn) -> list[dict[str, Any]]:
     query = sql.SQL(
         "SELECT agent_id, name, description, owner, status, default_version, "
@@ -249,7 +299,8 @@ def register_agent_card(
 ) -> None:
     version_to_use = _next_agent_version(conn, agent_id, version)
     if isinstance(card_json, dict):
-        card_json = {**card_json, "agentVersion": version_to_use}
+        if "agentVersion" not in card_json:
+            card_json = {**card_json, "agentVersion": str(version_to_use)}
     upsert_agent(
         conn,
         agent_id=agent_id,

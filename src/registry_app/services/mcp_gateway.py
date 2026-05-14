@@ -8,7 +8,12 @@ from typing import Any, Callable, Iterable, Mapping
 from registry_app.services.a2a_client import A2AClientProtocol, build_a2a_client
 from registry_app.config import load_settings
 from registry_app.db import get_connection
-from registry_app.registry import get_agent_card, list_agent_cards
+from registry_app.loopback import make_async_client
+from registry_app.registry import (
+    get_agent_card,
+    get_default_version,
+    list_agent_cards,
+)
 
 
 def _coerce_card_json(value: Any) -> dict[str, Any]:
@@ -114,6 +119,21 @@ def _auth_from_schemes(schemes: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     return {}
 
 
+def _is_same_host(url: str, base_url: str | None) -> bool:
+    if not url or not base_url:
+        return False
+    return url.startswith(base_url.rstrip("/"))
+
+
+def _workspace_auth_headers() -> dict[str, str]:
+    try:
+        from databricks.sdk import WorkspaceClient
+
+        return dict(WorkspaceClient().config.authenticate() or {})
+    except Exception:
+        return {}
+
+
 async def _invoke_agent(
     conn,
     *,
@@ -130,25 +150,29 @@ async def _invoke_agent(
             "error": {"message": f"Unknown agent_id: {agent_id}"},
         }
     card_json = _coerce_card_json(card_row.get("card_json"))
+    version_row = get_default_version(conn, agent_id)
+    tags = version_row.get("tags") if isinstance(version_row, dict) else None
+
     a2a_url = card_json.get("url") or card_json.get("a2a_url")
+    if version_row and version_row.get("api_url"):
+        a2a_url = version_row["api_url"]
     if not a2a_url:
         return {
             "status": "error",
             "agent_id": agent_id,
             "error": {"message": f"Missing a2a_url for agent_id: {agent_id}"},
         }
+
+    settings = load_settings()
+    base_url = (settings.registry_base_url or "").rstrip("/")
     if isinstance(a2a_url, str) and a2a_url.startswith("/"):
-        settings = load_settings()
-        base_url = settings.registry_base_url
         if not base_url:
             return {
                 "status": "error",
                 "agent_id": agent_id,
-                "error": {
-                    "message": "Relative a2a_url requires registry_base_url in config."
-                },
+                "error": {"message": "Relative a2a_url requires registry_base_url in config."},
             }
-        a2a_url = base_url.rstrip("/") + a2a_url
+        a2a_url = f"{base_url}{a2a_url}"
 
     goal = task.get("goal")
     if not goal:
@@ -157,9 +181,66 @@ async def _invoke_agent(
             "agent_id": agent_id,
             "error": {"message": "Missing task.goal"},
         }
-    auth_config = _auth_from_schemes(card_json.get("authSchemes", []) or [])
+
+    headers = _auth_from_schemes(card_json.get("authSchemes", []) or []).get("headers", {})
+    headers = {**_workspace_auth_headers(), **headers}
+
+    api_protocol = None
+    if isinstance(tags, dict):
+        api_protocol = (
+            tags.get("api_protocol") or tags.get("protocol") or tags.get("response_format")
+        )
+
+    if api_protocol == "a2a":
+        prompt = str(goal)
+        request_payload: dict[str, Any] = {
+            "jsonrpc": "2.0",
+            "id": f"mcp-{agent_id}",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "kind": "message",
+                    "messageId": f"mcp-{agent_id}",
+                    "parts": [{"kind": "text", "text": prompt}],
+                },
+                "metadata": dict(task.get("metadata", {}) or {}),
+            },
+        }
+        client, request_url = make_async_client(a2a_url, base_url, timeout=float(timeout_seconds))
+        try:
+            async with client:
+                response = await client.post(request_url, json=request_payload, headers=headers)
+            try:
+                parsed: Any = response.json()
+            except Exception:
+                parsed = response.text
+            return {
+                "status": "success" if 200 <= response.status_code < 300 else "error",
+                "agent_id": agent_id,
+                "a2a_url": a2a_url,
+                "status_code": response.status_code,
+                "result": parsed,
+            }
+        except asyncio.TimeoutError:
+            return {
+                "status": "timeout",
+                "agent_id": agent_id,
+                "error": {"message": "A2A request timed out"},
+            }
+        except Exception as exc:
+            return {
+                "status": "error",
+                "agent_id": agent_id,
+                "a2a_url": a2a_url,
+                "error": {
+                    "type": type(exc).__name__,
+                    "message": str(exc) or repr(exc),
+                },
+            }
+
     client: A2AClientProtocol = a2a_client_factory(
-        base_url=a2a_url, auth_config=auth_config
+        base_url=a2a_url, auth_config={"headers": headers} if headers else {}
     )
     try:
         result = await client.invoke_task(
@@ -174,7 +255,7 @@ async def _invoke_agent(
             "agent_id": agent_id,
             "error": {"message": "A2A request timed out"},
         }
-    except Exception as exc:  # pragma: no cover - defensive guard
+    except Exception as exc:
         return {
             "status": "error",
             "agent_id": agent_id,

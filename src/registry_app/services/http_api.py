@@ -115,11 +115,12 @@ def build_registry_api() -> FastAPI:
             raise HTTPException(status_code=404, detail="Agent card not found.")
         return card["card_json"]
 
-    @app.post("/agent-cards")
+    @app.post("/register-agent-card")
     def register_agent_card_route(payload: RegisterAgentCardRequest):
         if payload.api_url:
             _validate_api_url(payload.api_url)
         card = payload.card.model_dump()
+        card.setdefault("schemaVersion", "1.0")
         card.setdefault("humanReadableId", payload.agent_id)
         card.setdefault("url", "/a2a")
         with get_connection() as conn:
@@ -176,6 +177,11 @@ def build_registry_api() -> FastAPI:
         margin-left: 16px;
         font-weight: 600;
       }}
+      .agent-link {{
+        color: #1e5eff;
+        text-decoration: underline;
+        cursor: pointer;
+      }}
       .container {{
         max-width: 1100px;
         margin: 24px auto;
@@ -192,7 +198,13 @@ def build_registry_api() -> FastAPI:
       table {{ border-collapse: collapse; width: 100%; margin-top: 12px; }}
       th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
       th {{ background: #f3f3f7; }}
-      pre {{ background: #f8f8f8; padding: 12px; border-radius: 8px; }}
+      pre {{
+        background: #f8f8f8;
+        padding: 12px;
+        border-radius: 8px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }}
       .status {{ margin-bottom: 12px; color: var(--muted); }}
       .ok {{ color: #1b5e20; }}
       .bad {{ color: #b71c1c; }}
@@ -267,6 +279,7 @@ def build_registry_api() -> FastAPI:
       <div class="card">
         <h3>Agent Card</h3>
         <pre id="card">Select an agent to view its card.</pre>
+        <div class="status" id="card_meta"></div>
       </div>
       <script>
         async function loadStatus() {
@@ -290,7 +303,7 @@ def build_registry_api() -> FastAPI:
           for (const agent of data.agents || []) {
             const tr = document.createElement("tr");
             tr.innerHTML = `
-              <td>${agent.agent_id}</td>
+              <td><a class="agent-link" data-agent-id="${agent.agent_id}">${agent.agent_id}</a></td>
               <td>${agent.name}</td>
               <td>${agent.description}</td>
               <td>${agent.status}</td>
@@ -299,18 +312,47 @@ def build_registry_api() -> FastAPI:
             tr.addEventListener("click", () => loadCard(agent.agent_id));
             tbody.appendChild(tr);
           }
+          document.querySelectorAll(".agent-link").forEach((link) => {
+            link.addEventListener("click", (event) => {
+              event.preventDefault();
+              loadCard(link.getAttribute("data-agent-id"));
+            });
+          });
         }
 
         async function loadCard(agentId) {
           const pre = document.getElementById("card");
+          const meta = document.getElementById("card_meta");
           pre.textContent = "Loading...";
-          const resp = await fetch(`/registry/agents/${agentId}/card`);
-          if (!resp.ok) {
+          meta.textContent = "";
+
+          const cardResp = await fetch(`/registry/agents/${agentId}/card`);
+          if (!cardResp.ok) {
             pre.textContent = "Card not found.";
             return;
           }
-          const data = await resp.json();
-          pre.textContent = JSON.stringify(data, null, 2);
+          const card = await cardResp.json();
+          pre.textContent = JSON.stringify(card, null, 2);
+
+          const agentResp = await fetch(`/registry/agents/${agentId}`);
+          if (!agentResp.ok) {
+            meta.textContent = "Agent metadata not found.";
+            return;
+          }
+          const agent = await agentResp.json();
+          const version = agent.default_version;
+          if (!version) {
+            meta.textContent = "No default registry version.";
+            return;
+          }
+          const versionResp = await fetch(`/registry/agents/${agentId}/versions/${version}`);
+          if (!versionResp.ok) {
+            meta.textContent = `Registry version: ${version} (details unavailable)`;
+            return;
+          }
+          const versionData = await versionResp.json();
+          const apiUrl = versionData.api_url || "Not set";
+          meta.textContent = `Registry version: ${version} · API URL: ${apiUrl}`;
         }
 
         loadStatus();
@@ -344,6 +386,13 @@ def build_registry_api() -> FastAPI:
             <label>Skills (comma-separated)</label>
             <input id="skills" placeholder="test,registry"/>
           </div>
+          <div>
+            <label>API Protocol</label>
+            <select id="api_protocol">
+              <option value="">(raw)</option>
+              <option value="openai">openai</option>
+            </select>
+          </div>
         </div>
         <div style="margin-top: 12px;">
           <label>Description</label>
@@ -360,6 +409,7 @@ def build_registry_api() -> FastAPI:
           const name = document.getElementById("name").value.trim();
           const url = "/a2a";
           const apiUrl = document.getElementById("api_url").value.trim();
+          const apiProtocol = document.getElementById("api_protocol").value.trim();
           const description = document.getElementById("description").value.trim();
           const skills = document.getElementById("skills").value.split(",").map(s => s.trim()).filter(Boolean);
           const statusEl = document.getElementById("status_msg");
@@ -372,6 +422,7 @@ def build_registry_api() -> FastAPI:
           const payload = {
             agent_id: agentId,
             api_url: apiUrl,
+            ...(apiProtocol ? { tags: { api_protocol: apiProtocol } } : {}),
             card: {
               name: name,
               description: description || "Registered via UI",
@@ -389,7 +440,7 @@ def build_registry_api() -> FastAPI:
           };
 
           statusEl.textContent = "Submitting...";
-          const resp = await fetch("/registry/agent-cards", {
+          const resp = await fetch("/registry/register-agent-card", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)

@@ -14,6 +14,7 @@ class Settings:
     lakebase_host: str | None
     lakebase_db: str | None
     lakebase_user: str | None
+    lakebase_instance_name: str | None
     registry_schema: str
     registry_base_url: str | None
     workspace_url: str | None
@@ -30,16 +31,27 @@ def _load_config() -> dict[str, Any]:
     return data
 
 
+def _resolve_lakebase_host_from_instance(instance_name: str) -> str | None:
+    try:
+        from databricks.sdk import WorkspaceClient
+
+        ws = WorkspaceClient()
+        instance = ws.database.get_database_instance(name=instance_name)
+        return getattr(instance, "read_write_dns", None)
+    except Exception:
+        return None
+
+
 def load_settings() -> Settings:
     config = _load_config()
     lakebase_dsn = config.get("lakebase_dsn") or None
     lakebase_host = config.get("lakebase_host") or None
     lakebase_db = config.get("lakebase_db") or None
     lakebase_user = config.get("lakebase_user") or None
-    if not lakebase_dsn and not lakebase_host:
-        raise RuntimeError(
-            "Missing required config: provide lakebase_dsn or lakebase_host."
-        )
+    lakebase_instance_name = config.get("lakebase_instance_name") or None
+
+    if not lakebase_dsn and not lakebase_host and lakebase_instance_name:
+        lakebase_host = _resolve_lakebase_host_from_instance(lakebase_instance_name)
 
     workspace_url = config.get("workspace_url") or None
     registry_base_url = (
@@ -62,6 +74,7 @@ def load_settings() -> Settings:
         lakebase_host=lakebase_host,
         lakebase_db=lakebase_db,
         lakebase_user=lakebase_user,
+        lakebase_instance_name=lakebase_instance_name,
         registry_schema=config.get("registry_schema", "agent_registry"),
         registry_base_url=registry_base_url,
         workspace_url=workspace_url,

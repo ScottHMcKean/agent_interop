@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0",
+  "humanReadableId": "examples/databricks_agent",
+  "agentVersion": "0.1.0",
+  "name": "Databricks Serving Agent",
+  "description": "Example card for a Databricks model-serving agent.",
+  "url": "/a2a",
+  "authSchemes": [
+    {
+      "scheme": "none"
+    }
+  ],
+  "defaultInputModes": [
+    "text"
+  ],
+  "defaultOutputModes": [
+    "text"
+  ],
+  "capabilities": {
+    "streaming": false
+  },
+  "skills": [
+    {
+      "id": "databricks_agent",
+      "name": "Databricks Agent",
+      "description": "Handles requests via a Databricks serving endpoint."
+    }
+  ]
+}

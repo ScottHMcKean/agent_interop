@@ -238,3 +238,84 @@ def test_invoke_agent_unknown():
     )
     assert result["status"] == "error"
     assert result["agent_id"] == "missing"
+
+
+def test_invoke_agent_a2a_protocol_sends_jsonrpc(monkeypatch):
+    """When the version row tags api_protocol=a2a, _invoke_agent dispatches
+    a JSON-RPC message/send (no Databricks model-serving shape) and returns
+    the parsed response."""
+    rows = [
+        {
+            "agent_id": "test-agent",
+            "version": 1,
+            "default_version": "1",
+            "protocol": "a2a",
+            "api_url": "https://app.example.com/test-agent",
+            "tags": {"api_protocol": "a2a"},
+            "card_json": {
+                "name": "Test",
+                "url": "/test-agent",
+                "agentVersion": 1,
+                "authSchemes": [{"scheme": "none"}],
+            },
+        }
+    ]
+    conn = FakeConn(rows)
+    captured = {}
+
+    class _FakeResp:
+        status_code = 200
+        content = b"{}"
+        text = "{}"
+
+        def json(self):
+            return {"result": {"artifacts": [{"parts": [{"text": "pong"}]}]}}
+
+    class _FakeAsyncClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def aclose(self):
+            return None
+
+        async def post(self, url, *, json, headers):
+            captured["url"] = url
+            captured["json"] = json
+            captured["headers"] = dict(headers or {})
+            return _FakeResp()
+
+    def fake_make_async_client(api_url, base_url, *, timeout):
+        captured["base_url"] = base_url
+        captured["api_url"] = api_url
+        return _FakeAsyncClient(), api_url
+
+    monkeypatch.setattr(
+        "registry_app.services.mcp_gateway.make_async_client",
+        fake_make_async_client,
+    )
+    # Avoid the WorkspaceClient import path adding random headers.
+    monkeypatch.setattr(
+        "registry_app.services.mcp_gateway._workspace_auth_headers",
+        lambda: {},
+    )
+
+    result = asyncio.run(
+        _invoke_agent(
+            conn,
+            agent_id="test-agent",
+            task={"goal": "ping"},
+            timeout_seconds=5,
+            a2a_client_factory=lambda **_: None,  # must NOT be called
+        )
+    )
+
+    assert result["status"] == "success"
+    assert result["status_code"] == 200
+    body = captured["json"]
+    assert body["jsonrpc"] == "2.0"
+    assert body["method"] == "message/send"
+    parts = body["params"]["message"]["parts"]
+    assert parts == [{"kind": "text", "text": "ping"}]

@@ -34,9 +34,13 @@ def build_mcp_app():
             cards = list_agent_cards(conn, protocol="a2a")
         return {"agents": [card["agent_id"] for card in cards]}
 
-    mcp_app = app.http_app(
+    streamable_app = app.http_app(
         path="/",
         transport="streamable-http",
         stateless_http=True,
     )
-    return mcp_app, mcp_app.lifespan
+    sse_app = app.http_app(
+        path="/",
+        transport="sse",
+    )
+    return streamable_app, sse_app, streamable_app.lifespan

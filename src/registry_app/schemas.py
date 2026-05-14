@@ -18,10 +18,10 @@ class AgentCapabilities(BaseModel):
 
 
 class AgentCardPayload(BaseModel):
+    schemaVersion: str | None = None
     name: str
     description: str
     url: str
-    version: str
     defaultInputModes: list[str]
     defaultOutputModes: list[str]
     capabilities: AgentCapabilities
